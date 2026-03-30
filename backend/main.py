@@ -16,7 +16,11 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Blueprint QA API — creating tables if needed...")
-    await create_tables()
+    try:
+        await create_tables()
+        logger.info("Database tables ready.")
+    except Exception as exc:
+        logger.warning("DB init failed at startup (will retry on first request): %s", exc)
     yield
     logger.info("Shutting down Blueprint QA API.")
 
