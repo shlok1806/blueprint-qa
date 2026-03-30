@@ -1,0 +1,8 @@
+[phases.build]
+cmds = ["npm install --legacy-peer-deps", "npm run build"]
+
+[start]
+cmd = "node build"
+
+[variables]
+NODE_ENV = "production"

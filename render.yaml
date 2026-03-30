@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: blueprint-qa-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: UPLOAD_DIR
+        value: /tmp/uploads
+      - key: MAX_FILE_SIZE_MB
+        value: 50
+      - key: MAX_PAGES_PER_DOCUMENT
+        value: 10
+      - key: STORAGE_BACKEND
+        value: local
+    healthCheckPath: /health

@@ -1,0 +1,10 @@
+frontend/
+.venv/
+.git/
+.env
+*.md
+uploads/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store

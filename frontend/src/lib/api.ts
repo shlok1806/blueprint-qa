@@ -1,0 +1,125 @@
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+export type DocumentStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type IssueSeverity = 'low' | 'medium' | 'high';
+export type IssueType =
+  | 'missing_tag'
+  | 'dimension_mismatch'
+  | 'unlabeled_element'
+  | 'inconsistent_annotation'
+  | 'missing_scale'
+  | 'incomplete_detail';
+
+export interface Document {
+  id: string;
+  filename: string;
+  file_path: string;
+  page_count: number | null;
+  status: DocumentStatus;
+  uploaded_at: string;
+  analyzed_at: string | null;
+  issue_count: number;
+}
+
+export interface DocumentList {
+  documents: Document[];
+  total: number;
+}
+
+export interface Issue {
+  id: string;
+  document_id: string;
+  page_number: number;
+  issue_type: IssueType;
+  severity: IssueSeverity;
+  description: string;
+  location_hint: string | null;
+  raw_ocr_text: string | null;
+  created_at: string;
+}
+
+export interface IssueSummary {
+  total: number;
+  by_severity: Record<string, number>;
+  by_type: Record<string, number>;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    ...init,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
+// ── Documents API ──────────────────────────────────────────────────────────
+
+export async function uploadDocument(file: File): Promise<Document> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch(`${API_BASE}/api/documents/upload`, { method: 'POST', body: form });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function listDocuments(): Promise<DocumentList> {
+  return request<DocumentList>('/api/documents');
+}
+
+export async function getDocument(id: string): Promise<Document> {
+  return request<Document>(`/api/documents/${id}`);
+}
+
+export async function deleteDocument(id: string): Promise<void> {
+  return request<void>(`/api/documents/${id}`, { method: 'DELETE' });
+}
+
+// ── Analysis API ───────────────────────────────────────────────────────────
+
+export async function runAnalysis(documentId: string): Promise<Issue[]> {
+  return request<Issue[]>(`/api/analysis/${documentId}/run`, { method: 'POST' });
+}
+
+export async function getIssues(documentId: string): Promise<Issue[]> {
+  return request<Issue[]>(`/api/analysis/${documentId}/issues`);
+}
+
+export async function getIssueSummary(documentId: string): Promise<IssueSummary> {
+  return request<IssueSummary>(`/api/analysis/${documentId}/summary`);
+}
+
+// ── Export ─────────────────────────────────────────────────────────────────
+
+export function exportIssuesToCsv(issues: Issue[], filename: string): void {
+  const header = ['id', 'page_number', 'issue_type', 'severity', 'description', 'location_hint'];
+  const rows = issues.map((i) =>
+    [
+      i.id,
+      i.page_number,
+      i.issue_type,
+      i.severity,
+      `"${i.description.replace(/"/g, '""')}"`,
+      `"${(i.location_hint ?? '').replace(/"/g, '""')}"`,
+    ].join(',')
+  );
+  const csv = [header.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename.replace(/\.pdf$/i, '')}_issues.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
