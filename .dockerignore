@@ -1,10 +1,12 @@
-frontend/
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
 .venv/
 .git/
 .env
-*.md
 uploads/
 __pycache__/
 *.pyc
 *.pyo
 .DS_Store
+.claude/
