@@ -5,14 +5,13 @@ from backend.config import get_settings
 settings = get_settings()
 
 _is_supabase = "supabase.co" in settings.database_url or "pooler.supabase.com" in settings.database_url
-_is_pooler = "pooler.supabase.com" in settings.database_url
-_connect_args = {}
-if _is_supabase:
-    _connect_args["ssl"] = "require"
-if _is_pooler:
-    # PgBouncer (transaction mode) doesn't support prepared statements
-    _connect_args["statement_cache_size"] = 0
-engine = create_async_engine(settings.database_url, echo=False, connect_args=_connect_args)
+_connect_args = {"sslmode": "require"} if _is_supabase else {}
+
+engine = create_async_engine(
+    settings.database_url,
+    echo=False,
+    connect_args=_connect_args,
+)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
@@ -22,10 +21,7 @@ class Base(DeclarativeBase):
 
 async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+        yield session
 
 
 async def create_tables():
