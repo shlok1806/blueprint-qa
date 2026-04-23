@@ -75,7 +75,17 @@ async def run_analysis(document_id: uuid.UUID, db: AsyncSession) -> list[Issue]:
     all_issues: list[Issue] = []
 
     for page_num, image, ocr_text in page_data:
-        raw_issues = await analyze_page(image, ocr_text, page_num, total_pages)
+        try:
+            raw_issues = await analyze_page(image, ocr_text, page_num, total_pages)
+        except Exception as e:
+            logger.error(f"LLM analysis failed for document {document_id} page {page_num}: {e}")
+            await db.execute(
+                update(Document)
+                .where(Document.id == document_id)
+                .values(status=DocumentStatus.failed)
+            )
+            await db.commit()
+            raise
 
         for raw in raw_issues:
             issue_type = raw.get("issue_type", "").strip()

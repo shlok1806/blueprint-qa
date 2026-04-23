@@ -20,8 +20,8 @@ services:
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     ports:
       - '8000:8000'
@@ -29,15 +29,14 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://user:password@postgres:5432/blueprintqa
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      DATABASE_URL: postgresql+psycopg://user:password@postgres:5432/blueprintqa
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       UPLOAD_DIR: /app/uploads
       MAX_FILE_SIZE_MB: 50
       MAX_PAGES_PER_DOCUMENT: 10
       STORAGE_BACKEND: local
     volumes:
       - uploads_data:/app/uploads
-      - ./backend:/app  # hot-reload in dev; remove in prod
 
   frontend:
     build:
@@ -49,7 +48,6 @@ services:
     depends_on:
       - backend
     environment:
-      API_URL: http://backend:8000
       VITE_API_URL: http://localhost:8000  # browser-side — points to exposed backend port
 
 volumes:

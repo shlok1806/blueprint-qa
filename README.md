@@ -16,7 +16,7 @@ AI-powered quality assurance for construction and engineering drawings. Upload a
 |---|---|
 | Frontend | SvelteKit + Tailwind CSS (deployed on Vercel) |
 | Backend | FastAPI (Python 3.12, deployed on Render) |
-| Database | PostgreSQL / Supabase (async SQLAlchemy + asyncpg) |
+| Database | PostgreSQL / Supabase (async SQLAlchemy + psycopg) |
 | OCR | pytesseract + pdf2image |
 | AI | Anthropic Claude claude-opus-4-6 (multimodal) |
 | Storage | Local filesystem (/tmp on Render) |

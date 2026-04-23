@@ -189,6 +189,24 @@
     </div>
   {/if}
 
+  <!-- Failed state -->
+  {#if document.status === 'failed'}
+    <div class="card p-12 flex flex-col items-center gap-4 text-center">
+      <svg class="h-14 w-14 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+      </svg>
+      <div>
+        <p class="text-base font-semibold text-gray-700">Analysis failed</p>
+        <p class="text-sm text-gray-400 mt-1">
+          {analyzeError || 'An error occurred during QA analysis. You can retry below.'}
+        </p>
+      </div>
+      <button class="btn-primary" on:click={startAnalysis} disabled={analyzing}>
+        Retry Analysis
+      </button>
+    </div>
+  {/if}
+
   <!-- Completed state -->
   {#if document.status === 'completed'}
     {#if summary}

@@ -12,7 +12,10 @@ from backend.models.issue import Issue, IssueSeverity
 
 settings = get_settings()
 
-engine = create_async_engine(settings.database_url, echo=False)
+_is_supabase = "supabase.co" in settings.database_url or "pooler.supabase.com" in settings.database_url
+_connect_args = {"sslmode": "require"} if _is_supabase else {}
+
+engine = create_async_engine(settings.database_url, echo=False, connect_args=_connect_args)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 DUMMY_DOCS = [

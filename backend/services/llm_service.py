@@ -61,44 +61,39 @@ async def analyze_page(
         ocr_text=ocr_text or "(no text extracted)",
     )
 
-    try:
-        response = await client.messages.create(
-            model="claude-opus-4-6",
-            max_tokens=2048,
-            system=SYSTEM_PROMPT,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": image_b64,
-                            },
+    response = await client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=2048,
+        system=SYSTEM_PROMPT,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": image_b64,
                         },
-                        {"type": "text", "text": user_content},
-                    ],
-                }
-            ],
-        )
-        raw = response.content[0].text.strip()
+                    },
+                    {"type": "text", "text": user_content},
+                ],
+            }
+        ],
+    )
+    raw = response.content[0].text.strip()
 
-        # Strip markdown code fences if present
-        if raw.startswith("```"):
-            lines = raw.split("\n")
-            raw = "\n".join(lines[1:-1]) if lines[-1].strip() == "```" else "\n".join(lines[1:])
+    # Strip markdown code fences if present (handle ```json ... ``` and ``` ... ```)
+    if raw.startswith("```"):
+        lines = raw.split("\n")
+        # Drop opening fence line; drop closing ``` if present
+        inner_lines = lines[1:]
+        if inner_lines and inner_lines[-1].strip() == "```":
+            inner_lines = inner_lines[:-1]
+        raw = "\n".join(inner_lines).strip()
 
-        issues = json.loads(raw)
-        if not isinstance(issues, list):
-            logger.warning(f"LLM returned non-list for page {page_num}: {raw[:200]}")
-            return []
-        return issues
-
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse LLM JSON for page {page_num}: {e}")
-        return []
-    except Exception as e:
-        logger.error(f"LLM call failed for page {page_num}: {e}")
-        return []
+    issues = json.loads(raw)
+    if not isinstance(issues, list):
+        raise ValueError(f"LLM returned non-list response for page {page_num}: {raw[:200]}")
+    return issues

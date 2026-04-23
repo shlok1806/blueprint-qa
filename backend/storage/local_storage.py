@@ -1,5 +1,4 @@
-import os
-import shutil
+import aiofiles
 from pathlib import Path
 from fastapi import UploadFile
 from backend.config import get_settings
@@ -14,8 +13,9 @@ class LocalStorage:
 
     async def save(self, file: UploadFile, filename: str) -> str:
         dest = self.upload_dir / filename
-        with open(dest, "wb") as f:
-            shutil.copyfileobj(file.file, f)
+        async with aiofiles.open(dest, "wb") as f:
+            while chunk := await file.read(1024 * 256):
+                await f.write(chunk)
         return str(dest)
 
     def get_path(self, file_path: str) -> str:

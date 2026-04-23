@@ -12,3 +12,6 @@ anthropic==0.40.0
 pdf2image==1.17.0
 pytesseract==0.3.13
 Pillow==11.0.0
+aiofiles==24.1.0
+# Optional: only required when STORAGE_BACKEND=azure
+azure-storage-blob==12.23.1
