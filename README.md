@@ -10,6 +10,11 @@ AI-powered quality assurance for construction and engineering drawings. Upload a
 | Backend API | https://blueprint-qa-3.onrender.com |
 | API docs (Swagger) | https://blueprint-qa-3.onrender.com/docs |
 
+## Deployment
+
+- **Single URL (simplest):** deploy the Docker image from [`backend/Dockerfile`](backend/Dockerfile) on Render, [Fly.io](https://fly.io) ([`fly.toml`](fly.toml)), or Railway. The container serves the API and the static SPA; the UI uses same-origin `/api/...` (`.env.production` is excluded from the Docker build via [`.dockerignore`](.dockerignore)).
+- **Split frontend + API:** point a Vercel project at the [`frontend/`](frontend/) directory. [`frontend/vercel.json`](frontend/vercel.json) treats the app as a static export (`index.html` + SPA rewrites). Keep [`frontend/.env.production`](frontend/.env.production) set to your public API origin.
+
 ## Tech Stack
 
 | Layer | Technology |

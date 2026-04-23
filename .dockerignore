@@ -1,6 +1,8 @@
 frontend/node_modules/
 frontend/.svelte-kit/
 frontend/build/
+# Docker image serves API + SPA from one origin; bake relative /api URLs (not Vercel's Render URL)
+frontend/.env.production
 .venv/
 .git/
 .env
