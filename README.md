@@ -1,6 +1,6 @@
 # Blueprint QA
 
-AI-powered quality assurance for construction and engineering drawings. Upload a PDF and Claude claude-opus-4-6 will flag missing tags, dimension mismatches, unlabeled elements, and more.
+AI-powered quality assurance for construction and engineering drawings. Upload a PDF and Claude Opus 4.6 will flag missing tags, dimension mismatches, unlabeled elements, and more.
 
 ## Live Demo
 
@@ -23,7 +23,7 @@ AI-powered quality assurance for construction and engineering drawings. Upload a
 | Backend | FastAPI (Python 3.12, deployed on Render) |
 | Database | PostgreSQL / Supabase (async SQLAlchemy + psycopg) |
 | OCR | pytesseract + pdf2image |
-| AI | Anthropic Claude claude-opus-4-6 (multimodal) |
+| AI | Anthropic Claude Opus 4.6 (multimodal) |
 | Storage | Local filesystem (/tmp on Render) |
 
 ---
@@ -138,7 +138,7 @@ blueprint-qa/
 │   ├── routers/              # API route handlers
 │   ├── services/
 │   │   ├── ocr_service.py    # pdf2image + pytesseract
-│   │   ├── llm_service.py    # Claude claude-opus-4-6 multimodal calls
+│   │   ├── llm_service.py    # Claude Opus 4.6 multimodal calls
 │   │   └── qa_service.py     # Pipeline orchestration
 │   ├── storage/              # Local storage adapter
 │   ├── seed.py               # Demo data seeder
