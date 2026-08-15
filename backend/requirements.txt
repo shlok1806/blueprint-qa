@@ -1,6 +1,11 @@
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
-sqlalchemy==2.0.36
+sqlalchemy[asyncio]==2.0.36
+# greenlet is required by SQLAlchemy's async engine. Plain `sqlalchemy` does not
+# install it - only the [asyncio] extra does. Without it every DB-backed route
+# raises "the greenlet library is required to use this function" as a 500, while
+# /health still returns 200. Pinned explicitly so it can never be dropped again.
+greenlet==3.5.5
 psycopg[binary]==3.2.3
 alembic==1.14.0
 pydantic==2.10.2

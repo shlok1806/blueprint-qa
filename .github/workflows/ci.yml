@@ -8,6 +8,7 @@ on:
 
 jobs:
   frontend:
+    name: Frontend build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -22,7 +23,84 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+  backend-smoke:
+    # The build-only CI that preceded this shipped a broken deploy: `docker build`
+    # succeeded while every DB-backed route returned 500, because `sqlalchemy` was
+    # pinned without its [asyncio] extra and greenlet was therefore never installed.
+    # Building is not evidence that the app runs. This job runs it.
+    name: Backend smoke test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: blueprintqa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/blueprintqa
+      ANTHROPIC_API_KEY: sk-ant-dummy-key-for-ci
+      STORAGE_BACKEND: local
+      UPLOAD_DIR: ./uploads
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install exactly what production installs
+        run: pip install -r backend/requirements.txt
+
+      - name: Start the API
+        run: |
+          python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 &
+          echo $! > /tmp/api.pid
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8000/health >/dev/null && exit 0
+            sleep 1
+          done
+          echo "API failed to become live within 30s"; exit 1
+
+      - name: Readiness must be green (catches a dead or misconfigured DB)
+        run: |
+          body=$(curl -s -w '\n%{http_code}' http://127.0.0.1:8000/health/ready)
+          code=$(echo "$body" | tail -1)
+          echo "$body"
+          [ "$code" = "200" ] || { echo "::error::/health/ready returned $code"; exit 1; }
+
+      - name: Every DB-backed route must return 2xx
+        run: |
+          fail=0
+          for path in /api/documents /openapi.json; do
+            code=$(curl -s -o /tmp/out.txt -w '%{http_code}' "http://127.0.0.1:8000$path")
+            echo "$path -> $code"
+            if [ "$code" -ge 400 ]; then
+              echo "::error::$path returned $code"; head -c 500 /tmp/out.txt; fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Upload round-trip (exercises storage + DB write path)
+        run: |
+          printf '%%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%%%EOF\n' > /tmp/t.pdf
+          code=$(curl -s -o /tmp/up.txt -w '%{http_code}' -F 'file=@/tmp/t.pdf;type=application/pdf' \
+            http://127.0.0.1:8000/api/documents/upload)
+          echo "upload -> $code"; cat /tmp/up.txt
+          [ "$code" = "201" ] || { echo "::error::upload returned $code"; exit 1; }
+
+      - name: Dump API logs on failure
+        if: failure()
+        run: kill -0 "$(cat /tmp/api.pid)" 2>/dev/null && echo "api still running" || echo "api died"
+
   docker-image:
+    name: Docker image builds
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from backend.database import create_tables
 from backend.routers import documents, analysis
@@ -47,7 +47,31 @@ app.include_router(analysis.router)
 
 @app.get("/health")
 async def health():
+    """Liveness: the process is up. Deliberately does not touch the database,
+    so a DB outage does not cause the platform to restart-loop the container."""
     return {"status": "ok"}
+
+
+@app.get("/health/ready")
+async def readiness():
+    """Readiness: the app can actually serve requests.
+
+    /health alone returned 200 while every DB-backed route was returning 500,
+    which made a fully broken deploy look healthy. This probe executes a real
+    query, so the failure is visible from outside.
+    """
+    from sqlalchemy import text
+    from backend.database import AsyncSessionLocal
+
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unavailable", "database": f"{type(exc).__name__}: {exc}"},
+        )
+    return {"status": "ready", "database": "ok"}
 
 
 # Serve the SvelteKit static build (placed here by Dockerfile)
