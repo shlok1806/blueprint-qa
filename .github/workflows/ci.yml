@@ -46,7 +46,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/blueprintqa
-      ANTHROPIC_API_KEY: sk-ant-dummy-key-for-ci
+      NVIDIA_API_KEY: nvapi-dummy-key-for-ci
       STORAGE_BACKEND: local
       UPLOAD_DIR: ./uploads
     steps:

@@ -4,7 +4,13 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://user:password@localhost:5432/blueprintqa"
-    anthropic_api_key: str = ""
+
+    # LLM provider: NVIDIA NIM, which exposes an OpenAI-compatible API.
+    nvidia_api_key: str = ""
+    llm_base_url: str = "https://integrate.api.nvidia.com/v1"
+    # Must be vision-capable: pages are sent as images.
+    llm_vision_model: str = "meta/llama-3.2-11b-vision-instruct"
+    llm_max_tokens: int = 2048
     upload_dir: str = "./uploads"
     max_file_size_mb: int = 50
     max_pages_per_document: int = 10

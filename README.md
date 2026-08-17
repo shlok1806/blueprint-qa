@@ -1,6 +1,6 @@
 # Blueprint QA
 
-AI-powered quality assurance for construction and engineering drawings. Upload a PDF and Claude Opus 4.6 will flag missing tags, dimension mismatches, unlabeled elements, and more.
+AI-powered quality assurance for construction and engineering drawings. Upload a PDF and a vision model will flag missing tags, dimension mismatches, unlabeled elements, and more.
 
 ## Live Demo
 
@@ -23,7 +23,7 @@ AI-powered quality assurance for construction and engineering drawings. Upload a
 | Backend | FastAPI (Python 3.12, deployed on Render) |
 | Database | PostgreSQL / Supabase (async SQLAlchemy + psycopg) |
 | OCR | pytesseract + pdf2image |
-| AI | Anthropic Claude Opus 4.6 (multimodal) |
+| AI | NVIDIA NIM — `meta/llama-3.2-11b-vision-instruct` (multimodal, OpenAI-compatible API) |
 | Storage | Local filesystem (/tmp on Render) |
 
 ---
@@ -32,13 +32,13 @@ AI-powered quality assurance for construction and engineering drawings. Upload a
 
 ### 1. Prerequisites
 - Docker + Docker Compose
-- An [Anthropic API key](https://console.anthropic.com/)
+- An [NVIDIA API key](https://build.nvidia.com/) (starts with `nvapi-`)
 
 ### 2. Configure environment
 
 ```bash
 cp .env.example .env
-# Edit .env and set your ANTHROPIC_API_KEY and DATABASE_URL
+# Edit .env and set your NVIDIA_API_KEY and DATABASE_URL
 ```
 
 ### 3. Start all services
@@ -82,7 +82,7 @@ pip install -r backend/requirements.txt
 
 ```bash
 cp .env.example .env
-# Fill in ANTHROPIC_API_KEY and DATABASE_URL
+# Fill in NVIDIA_API_KEY and DATABASE_URL
 
 uvicorn backend.main:app --reload --port 8000
 ```
@@ -138,7 +138,7 @@ blueprint-qa/
 │   ├── routers/              # API route handlers
 │   ├── services/
 │   │   ├── ocr_service.py    # pdf2image + pytesseract
-│   │   ├── llm_service.py    # Claude Opus 4.6 multimodal calls
+│   │   ├── llm_service.py    # NVIDIA NIM multimodal calls
 │   │   └── qa_service.py     # Pipeline orchestration
 │   ├── storage/              # Local storage adapter
 │   ├── seed.py               # Demo data seeder
@@ -165,7 +165,7 @@ blueprint-qa/
 - Runtime: Docker
 - Dockerfile: `./backend/Dockerfile`
 - Docker Build Context: `.` (repo root)
-- Environment variables: `DATABASE_URL`, `ANTHROPIC_API_KEY`, `UPLOAD_DIR=/tmp/uploads`
+- Environment variables: `DATABASE_URL`, `NVIDIA_API_KEY`, `UPLOAD_DIR=/tmp/uploads`
 
 ### Frontend (Vercel)
 - Framework: SvelteKit

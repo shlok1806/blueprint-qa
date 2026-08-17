@@ -3,13 +3,25 @@ import json
 import logging
 import io
 from PIL import Image
-import anthropic
+from openai import AsyncOpenAI
 from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-SYSTEM_PROMPT = """You are an expert construction drawing QA inspector. You analyze engineering drawings (mechanical, electrical, structural, civil) for quality issues. You are precise, technical, and thorough."""
+# Mirrors backend.models.issue.IssueSeverity and the categories the prompt lists.
+# Anything outside these sets is dropped in _normalise before it reaches the DB.
+VALID_SEVERITIES = {"low", "medium", "high"}
+VALID_ISSUE_TYPES = {
+    "missing_tag",
+    "dimension_mismatch",
+    "unlabeled_element",
+    "inconsistent_annotation",
+    "missing_scale",
+    "incomplete_detail",
+}
+
+SYSTEM_PROMPT = """You are an expert construction drawing QA inspector. You analyze engineering drawings (mechanical, electrical, structural, civil) for quality issues. You are precise, technical, and thorough.\n\nYou reply with a single JSON object and nothing else. No prose, no explanation, no markdown code fences. The object has exactly one key, "issues", whose value is an array. If you find no issues, reply with {"issues": []}."""
 
 USER_PROMPT_TEMPLATE = """Analyze this engineering drawing page (page {page_num} of {total_pages}) for QA issues.
 
@@ -26,15 +38,20 @@ Look for these categories of issues:
 - missing_scale: No scale bar or scale reference present
 - incomplete_detail: Sections or details referenced elsewhere but missing or truncated
 
-Return ONLY a JSON array. Each item must have:
+Reply with a single JSON object of exactly this shape:
 {{
-  "issue_type": "<category from above>",
-  "severity": "low" | "medium" | "high",
-  "description": "<clear explanation of the issue>",
-  "location_hint": "<where on the page, e.g. top-right, center, room 204>"
+  "issues": [
+    {{
+      "issue_type": "<one of: missing_tag, dimension_mismatch, unlabeled_element, inconsistent_annotation, missing_scale, incomplete_detail>",
+      "severity": "<one of: low, medium, high>",
+      "description": "<clear explanation of the issue>",
+      "location_hint": "<where on the page, e.g. top-right, center, room 204>"
+    }}
+  ]
 }}
 
-If no issues are found, return an empty array: []"""
+Use only the exact lowercase values listed for issue_type and severity.
+If no issues are found, reply with {{"issues": []}}."""
 
 
 def _image_to_base64(image: Image.Image) -> str:
@@ -50,10 +67,10 @@ async def analyze_page(
     total_pages: int,
 ) -> list[dict]:
     """
-    Send a drawing page image + OCR text to Claude for QA analysis.
+    Send a drawing page image + OCR text to the vision model for QA analysis.
     Returns a list of issue dicts, or [] on failure.
     """
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = AsyncOpenAI(api_key=settings.nvidia_api_key, base_url=settings.llm_base_url)
     image_b64 = _image_to_base64(image)
     user_content = USER_PROMPT_TEMPLATE.format(
         page_num=page_num,
@@ -61,39 +78,88 @@ async def analyze_page(
         ocr_text=ocr_text or "(no text extracted)",
     )
 
-    response = await client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=2048,
-        system=SYSTEM_PROMPT,
+    response = await client.chat.completions.create(
+        model=settings.llm_vision_model,
+        max_tokens=settings.llm_max_tokens,
+        temperature=0.2,
+        # Enforced JSON. Without it this model reliably ignores "reply with JSON"
+        # and answers in markdown prose, which json.loads cannot recover from.
+        # json_object mode requires an object, hence the {"issues": [...]} wrapper.
+        response_format={"type": "json_object"},
         messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
                 "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/jpeg",
-                            "data": image_b64,
-                        },
-                    },
                     {"type": "text", "text": user_content},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"},
+                    },
                 ],
-            }
+            },
         ],
     )
-    raw = response.content[0].text.strip()
+    raw = (response.choices[0].message.content or "").strip()
 
-    # Strip markdown code fences if present (handle ```json ... ``` and ``` ... ```)
+    # Defensive: json_object mode should make fences impossible, but a model that
+    # ignores it once should not take the whole page down.
     if raw.startswith("```"):
         lines = raw.split("\n")
-        # Drop opening fence line; drop closing ``` if present
         inner_lines = lines[1:]
         if inner_lines and inner_lines[-1].strip() == "```":
             inner_lines = inner_lines[:-1]
         raw = "\n".join(inner_lines).strip()
 
-    issues = json.loads(raw)
-    if not isinstance(issues, list):
-        raise ValueError(f"LLM returned non-list response for page {page_num}: {raw[:200]}")
-    return issues
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("Page %s: model returned unparseable JSON: %s", page_num, raw[:200])
+        return []
+
+    if isinstance(payload, list):
+        issues = payload  # tolerate a bare array
+    elif isinstance(payload, dict):
+        issues = payload.get("issues", [])
+    else:
+        logger.warning("Page %s: unexpected JSON payload type %s", page_num, type(payload))
+        return []
+
+    return _normalise(issues, page_num)
+
+
+def _normalise(issues: list, page_num: int) -> list[dict]:
+    """Drop or repair items the model got wrong.
+
+    The previous model followed the schema closely enough that raw output could
+    be trusted. This one is smaller and occasionally returns a capitalised
+    severity or an issue_type outside the documented set, which the database
+    enum rejects at insert time. Filtering here keeps one bad item from failing
+    the whole page.
+    """
+    clean: list[dict] = []
+    for item in issues:
+        if not isinstance(item, dict):
+            continue
+
+        severity = str(item.get("severity", "")).strip().lower()
+        if severity not in VALID_SEVERITIES:
+            logger.debug("Page %s: dropping unknown severity %r", page_num, item.get("severity"))
+            continue
+
+        issue_type = str(item.get("issue_type", "")).strip().lower().replace(" ", "_")
+        if issue_type not in VALID_ISSUE_TYPES:
+            logger.debug("Page %s: dropping unknown issue_type %r", page_num, item.get("issue_type"))
+            continue
+
+        description = str(item.get("description", "")).strip()
+        if not description:
+            continue
+
+        clean.append({
+            "issue_type": issue_type,
+            "severity": severity,
+            "description": description,
+            "location_hint": str(item.get("location_hint", "") or "").strip(),
+        })
+    return clean
