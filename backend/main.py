@@ -2,11 +2,12 @@ import os
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from backend.database import create_tables
+from sqlalchemy.exc import DBAPIError, OperationalError
+from backend.database import create_tables, check_connection
 from backend.routers import documents, analysis
 
 logging.basicConfig(level=logging.INFO)
@@ -45,6 +46,20 @@ app.include_router(documents.router)
 app.include_router(analysis.router)
 
 
+@app.exception_handler(OperationalError)
+@app.exception_handler(DBAPIError)
+async def database_unavailable_handler(request: Request, exc: Exception):
+    """Report a dead database as 503 with a reason, not an opaque 500."""
+    logger.error("Database error on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Database unavailable. Check the DATABASE_URL environment "
+            "variable on the API host and see /health/ready for details."
+        },
+    )
+
+
 @app.get("/health")
 async def health():
     """Liveness: the process is up. Deliberately does not touch the database,
@@ -60,13 +75,10 @@ async def readiness():
     which made a fully broken deploy look healthy. This probe executes a real
     query, so the failure is visible from outside.
     """
-    from sqlalchemy import text
-    from backend.database import AsyncSessionLocal
-
     try:
-        async with AsyncSessionLocal() as session:
-            await session.execute(text("SELECT 1"))
+        await check_connection()
     except Exception as exc:
+        logger.error("Readiness check: database unreachable: %s", exc)
         return JSONResponse(
             status_code=503,
             content={"status": "unavailable", "database": f"{type(exc).__name__}: {exc}"},

@@ -7,13 +7,22 @@
   import { listDocuments } from '$lib/api';
 
   let loading = true;
+  let loadError: string | null = null;
 
-  onMount(async () => {
+  async function load() {
+    loadError = null;
     try {
       const result = await listDocuments();
       documents.set(result.documents);
     } catch (err) {
+      loadError = err instanceof Error ? err.message : String(err);
       console.error('Failed to load documents:', err);
+    }
+  }
+
+  onMount(async () => {
+    try {
+      await load();
     } finally {
       loading = false;
     }
@@ -24,8 +33,7 @@
   async function refresh() {
     refreshing = true;
     try {
-      const result = await listDocuments();
-      documents.set(result.documents);
+      await load();
     } finally {
       refreshing = false;
     }
@@ -83,6 +91,18 @@
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
         </svg>
         <p class="text-sm">Loading documents…</p>
+      </div>
+    {:else if loadError}
+      <div class="card p-12 text-center">
+        <svg class="mx-auto h-10 w-10 mb-3 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+        </svg>
+        <p class="text-base font-medium text-gray-700">Couldn’t reach the API</p>
+        <p class="text-sm mt-1 text-gray-500">{loadError}</p>
+        <button class="btn-secondary text-xs mt-4" on:click={refresh} disabled={refreshing}>
+          Try again
+        </button>
       </div>
     {:else if $documents.length === 0}
       <div class="card p-12 text-center text-gray-400">

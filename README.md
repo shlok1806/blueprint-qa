@@ -175,3 +175,21 @@ blueprint-qa/
 ### Database (Supabase)
 - PostgreSQL with SSL required
 - Tables: `documents`, `issues`
+- **Use a pooler connection string, not the direct one.** Supabase's direct host
+  (`db.<ref>.supabase.co`) resolves to IPv6 only, and Render has no IPv6 egress, so
+  it fails with a connection timeout on every request. Copy the **Session pooler**
+  string from Project Settings -> Database:
+  `postgresql+psycopg://postgres.<ref>:<password>@<cluster>-<region>.pooler.supabase.com:5432/postgres`
+
+---
+
+## Troubleshooting
+
+| Symptom | Check | Likely cause |
+|---|---|---|
+| API routes return 503 "Database unavailable" | `GET /health/ready` | `DATABASE_URL` wrong, or pointed at the IPv6-only direct Supabase host |
+| `/health` is 200 but the UI shows "Couldn't reach the API" | `GET /health/ready` | Database is down; the app is up |
+| UI calls the wrong API host | Network tab on the deployed page | Stale `VITE_API_URL` baked into the frontend build. It is compiled in at build time, so changing it requires a redeploy |
+
+`/health` is liveness only and never touches the database, because `render.yaml`
+uses it as the platform health check. `/health/ready` is the database readiness probe.
