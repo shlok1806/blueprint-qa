@@ -1,5 +1,5 @@
 # ── Stage 1: Build the SvelteKit static frontend ─────────────────────────────
-FROM node:20-bookworm-slim AS frontend-builder
+FROM node:24-bookworm-slim AS frontend-builder
 WORKDIR /app
 COPY frontend/package*.json ./
 ENV NODE_OPTIONS=--max-old-space-size=6144
